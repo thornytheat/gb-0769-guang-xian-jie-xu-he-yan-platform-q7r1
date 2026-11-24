@@ -15,18 +15,22 @@ def session(database):
         yield connection
 
 
+def publish_with(db, manifest):
+    key = manifest['inspection_id']
+    changed = db.execute('INSERT INTO inspections VALUES (?, ?) ON CONFLICT(id) DO NOTHING',
+                         (key, canonical(manifest))).rowcount
+    original = db.execute('SELECT document FROM inspections WHERE id=?', (key,)).fetchone()[0]
+    return json.loads(original), changed == 1
+
+
 def publish(database, manifest):
     with session(database) as db:
-        key = manifest['inspection_id']
-        changed = db.execute('INSERT INTO inspections VALUES (?, ?) ON CONFLICT(id) DO NOTHING',
-                             (key, canonical(manifest))).rowcount
-        original = db.execute('SELECT document FROM inspections WHERE id=?',(key,)).fetchone()[0]
-        return json.loads(original), changed == 1
+        return publish_with(db, manifest)
 
 
 def get(database, identifier):
     with session(database) as db:
-        record = db.execute('SELECT document FROM inspections WHERE id=?',(identifier,)).fetchone()
+        record = db.execute('SELECT document FROM inspections WHERE id=?', (identifier,)).fetchone()
         if not record:
             raise InspectionError('INSPECTION_NOT_FOUND', status=404)
         return json.loads(record[0])

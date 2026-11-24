@@ -1,0 +1,83 @@
+<section class="panel correction">
+  <h3>$ 双线路纠正签发</h3>
+  <p class="hint">两条线路的远端（{{ 'B' }} 端）测量原件贴反时，纠正单成对交换远端原件并各自复算；单独纠正一条会被拒绝。一条合格、一条超限则两条都暂缓，留档保持旧版。</p>
+  {% if correction_error %}<article class="panel issue" role="alert">{{ correction_error }}</article>{% endif %}
+
+  <div class="sheet">
+    <h4>线路与生效留档</h4>
+    <form class="command" method="post">
+      <input type="hidden" name="action" value="record">
+      <label>线路代号<input name="line_code" placeholder="例如 L1" required></label>
+      <button>录入当前轨迹组为新版本</button>
+    </form>
+    <table>
+      <thead><tr><th>线路</th><th>生效版本</th><th>留档编号</th><th>更新时间 UTC</th></tr></thead>
+      <tbody>
+      {% for row in line_rows %}
+        <tr><td>{{ row.line_code }}</td><td>v{{ row.version }}</td>
+        <td><a href="/inspect/certificate?inspection={{ row.inspection_id }}">{{ row.inspection_id[:15] }}</a></td>
+        <td>{{ row.updated_at }}</td></tr>
+      {% else %}
+        <tr><td colspan="4">尚未登记线路，先用上方表单录入一条线路的测量留档。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sheet">
+    <h4>开立纠正单（成对线路）</h4>
+    <form class="command" method="post">
+      <input type="hidden" name="action" value="submit">
+      <label>第一条线路<input name="first_line" list="line-codes" required></label>
+      <label>第二条线路<input name="second_line" list="line-codes" required></label>
+      <datalist id="line-codes">{% for row in line_rows %}<option value="{{ row.line_code }}">{% endfor %}</datalist>
+      <button>交换远端原件并复算</button>
+    </form>
+  </div>
+
+  {% if correction %}
+  <div class="sheet verdict" data-state="{{ correction.status }}">
+    <h4>纠正单 {{ correction.correction_id[:12] }} · {{ correction_status[correction.status] }}</h4>
+    {% if correction.return_reason %}<p role="alert">退回原因：{{ correction.return_reason }}</p>{% endif %}
+    <table>
+      <thead><tr><th>线路</th><th>复算结论</th><th>通过</th><th>超限</th><th>缺证</th><th>阻塞项</th><th>复算留档</th></tr></thead>
+      <tbody>
+      {% for row in correction.lines %}
+        <tr>
+          <td>{{ row.line_code }}</td>
+          <td data-state="{{ 'PASS' if row.approved else 'OVER_LIMIT' }}">{{ '合格' if row.approved else '不放行' }}</td>
+          <td>{{ row.recalc.passed }}</td><td>{{ row.recalc.over_limit }}</td><td>{{ row.recalc.missing }}</td>
+          <td>{{ row.blockers | join(' / ') if row.blockers else '—' }}</td>
+          <td><a href="/inspect/certificate?inspection={{ row.inspection_id }}">{{ row.inspection_id[:12] }}</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <form class="command" method="post">
+      <input type="hidden" name="correction_id" value="{{ correction.correction_id }}">
+      {% if correction.status in ['READY_TO_ARCHIVE','RETURNED','SUSPENDED'] %}
+      <button name="action" value="archive">两条都合格则一起留档</button>
+      {% endif %}
+      {% if correction.status in ['RETURNED','SUSPENDED'] %}
+      <button name="action" value="recheck">按当前留档重新复算</button>
+      {% endif %}
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="sheet">
+    <h4>纠正单记录</h4>
+    <table>
+      <thead><tr><th>纠正单</th><th>状态</th><th>创建时间 UTC</th><th>留档时间 UTC</th></tr></thead>
+      <tbody>
+      {% for row in correction_rows %}
+        <tr><td><a href="/inspect/correction?correction={{ row.correction_id }}">{{ row.correction_id[:12] }}</a></td>
+        <td>{{ correction_status[row.status] }}</td><td>{{ row.created_at }}</td>
+        <td>{{ row.archived_at or '—' }}</td></tr>
+      {% else %}
+        <tr><td colspan="4">暂无纠正单。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

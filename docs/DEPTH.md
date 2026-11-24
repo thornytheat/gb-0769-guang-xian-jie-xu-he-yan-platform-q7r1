@@ -14,6 +14,18 @@
 | M5 设计与实测对账 | 核对逐接头是否缺证 | POST /api/design | `app/modules/design/service.py` | `tests/test_design.py` |
 | M6 批次留档复跑 | 留档和重跑同一轨迹组 | POST /api/inspections | `app/modules/archive/storage.py` | `tests/test_archive.py` |
 | M7 光纤证据签发 | 复核签发条件并下载 | GET /api/certificate/<id> | `app/modules/certificate/service.py` | `tests/test_certificate.py` |
+| M8 双线路纠正签发 | 成对交换远端原件并联动留档 | POST /api/corrections | `app/modules/correction/service.py` | `tests/test_correction.py` |
+
+## M8 双线路纠正规则
+
+两条线路的远端测量原件（B 端，见 `config.REMOTE_SOURCE`）贴反时，纠正单必须成对开立：
+
+- 只交换两条线路的远端原件，A 端原件与设计清单各自保留；单独纠正一条会被 `CORRECTION_NEEDS_TWO_LINES` 拒绝，避免同一原件被两条线路采信。
+- 开立即对两条线路分别重跑全链路复算，各自给出合格判定与通过/超限/缺证计数；一条合格、一条超限则状态 `SUSPENDED`，两条都暂缓签发，留档仍指向旧版。
+- 两张纠正单共用任一线路时，`line_locks` 行级互斥只放行一张，另一张返回 `CORRECTION_LINE_BUSY`（409）并附占用方纠正单号；归档完成才释放锁。
+- 留档前任一线路录入新测量记录（`lines.version` 偏离纠正单钉版），归档请求把纠正单置为 `RETURNED` 并返回 `LINE_MEASUREMENT_CHANGED`；重核按当前有效留档重新交换、复算并推进钉版。
+- 只有两条都合格才更新留档；两线路的新版本在同一 SQLite 事务内写入，`claim_archived` 条件更新保证并发归档只生效一次，写入中断整体回滚，两线路同见旧版或同见新版。
+- 签发始终以线路当前生效留档（`lines.inspection_id`）为准，经 `/api/certificate/<id>` 复算。
 
 ## 陷阱登记
 

@@ -7,3 +7,21 @@ A、B 的 CSV 必填 `event,distance,unit,loss_db`，设计清单必填 `joint,d
 双端事件按链程和 ID 排序。一对一单调配对先最大化数量，再最小化距离差总和，最后依照同状态优先配对、保留较早 A 端、再保留较早 B 端的固定遍历作稳定裁决。容差 `pair_tol_m` 含等号。配对中点的分辨率为半毫米。配对双方的读数取带符号平均作为净损耗，保留单向负值和原行。通过阈值含等号，净值为负记录无效净增益。
 
 设计点与配对中点再次按相同优化目标一对一对齐，使用 `design_tol_m`。每接头以自己的 `limit_db` 判定，损耗模块的 `reference_limit_db` 用于单独预览。单端或孤配均保留。运行清单含源 SHA-256、校准参数、时间 UTC、耗时、版本、证据。快照摘要可用排序键、紧凑 JSON 和 UTF-8 重算。
+
+## 双线路纠正签发（M8）
+
+线路（`lines`）按代号持有当前生效留档：`version` 从 1 起随每次 `POST /api/lines/<code>/recordings` 递增，`inspection_id` 指向 `inspections` 内容寻址快照，`line_versions` 保留全部历史版本与当时材料。纠正单（`corrections`）字段：
+
+| 字段 | 含义 |
+|---|---|
+| `correction_id` | uuid4 十六进制主键 |
+| `status` | `READY_TO_ARCHIVE` / `SUSPENDED` / `RETURNED` / `ARCHIVED` |
+| `remote_source` | 被交换的远端原件键，固定为 `b` |
+| `lines[]` | 两线路复算快照：`pinned_version`、`inspection_id`、`approved`、`blockers`、`recalc`（passed/over_limit/missing/design_count）、`traces_sha256` |
+| `materials` | 交换远端原件后各线路待留档的完整轨迹组与设置 |
+| `pinned` | 开立/重核时各线路钉住的版本号，留档前据此识别新测量 |
+| `verdicts` | 按线路代号索引的复算结论，签发页面直接渲染 |
+| `return_reason` | 退回原因，目前为 `NEW_MEASUREMENT_PENDING` |
+| `created_at` / `updated_at` / `archived_at` | UTC 秒级时间戳 |
+
+接口：`POST /api/lines/<code>/recordings` 录入线路版本；`GET /api/lines`、`GET /api/lines/<code>` 查询；`POST /api/corrections`（体 `{"lines":[代号,代号]}`）开立；`GET /api/corrections`、`GET /api/corrections/<id>` 查询；`POST /api/corrections/<id>/archive` 联动留档；`POST /api/corrections/<id>/recheck` 退回或暂缓后重核。`line_locks` 以线路代号为主键持有纠正单互斥锁，归档成功才释放。
